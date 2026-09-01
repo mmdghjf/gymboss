@@ -77,7 +77,7 @@ header{flex:none;display:flex;align-items:center;gap:12px;padding:10px 16px;back
     <div class="stat">⭐ سطح <b id="lvl">۱</b> · <span id="lvlTitle">تازه‌کار</span>
       <div class="xpbar"><i id="xpfill"></i></div>
     </div>
-    <div class="stat" id="boostBox" hidden>🔥 بوست ×۲ — <b id="boostT">۳۰</b> ثانیه</div>
+    <div class="stat" id="boostBox" hidden>🔥 بوست <b id="boostX">×۲</b> — <b id="boostT">۳۰</b> ثانیه</div>
     <div class="spacer"></div>
     <button class="iconbtn" id="muteBtn" title="صدا">🔊</button>
   </header>
@@ -94,8 +94,9 @@ header{flex:none;display:flex;align-items:center;gap:12px;padding:10px 16px;back
       <div class="bossbox">
         <button id="bossBtn">🥊 مبارزه با باس<small id="bossSub"></small></button>
         <div class="hint" id="bossHint"></div>
-      </div>
-      <button id="resetBtn">🗑 شروع دوباره</button>
+      <div class="hint" id="statsLine" style="color:#9fc0ea"></div>
+    </div>
+    <button id="resetBtn">🗑 شروع دوباره</button>
       <p class="tips">روی زمین بازی کلیک کن (یا Space بزن) تا وزنه بزنی! کلیک‌های پشت‌سرهم «کمبو» می‌سازد. پروتئین طلایی که از صفحه رد می‌شود را بگیر تا ۳۰ ثانیه بوست ×۲ بگیری. پیشرفتت خودکار ذخیره می‌شود.</p>
     </aside>
   </div>
@@ -143,14 +144,16 @@ var UPG=[
  {id:'kb2',icon:'🫖',name:'کتل‌بل حرفه‌ای',info:'+۳۰ قدرت هر ضربه',base:2800,g:1.55},
  {id:'mch',icon:'🏗️',name:'دستگاه بدنسازی',info:'+۱۵۰ قدرت هر ضربه',base:30000,g:1.6},
  {id:'trn',icon:'🧑‍🏫',name:'مربی شخصی',info:'+۳ سکه در ثانیه (حتی وقتی بازی رو بستی)',base:60,g:1.6},
- {id:'prt',icon:'🥛',name:'پروتئین',info:'×۱٫۲۵ روی کل درآمد',base:900,g:3,max:8}
+ {id:'prt',icon:'🥛',name:'پروتئین',info:'×۱٫۲۵ روی کل درآمد',base:900,g:3,max:8},
+ {id:'shoe',icon:'👟',name:'کفش حرفه‌ای',info:'×۱٫۲ قدرت هر ضربه',base:5000,g:2.6,max:10},
+ {id:'gym',icon:'🏠',name:'باشگاه شخصی',info:'×۱٫۵ درآمد خودکار',base:40000,g:3.5,max:10}
 ];
 var TITLES=[[1,'تازه‌کار'],[4,'شاگرد باشگاه'],[8,'بدنساز'],[15,'بدنساز حرفه‌ای'],[25,'قهرمان محل'],[40,'ستاره باشگاه'],[60,'اسطوره آهنین'],[85,'جیم باس']];
 var BOSS_NAMES=['میدی خفن','بروسلی کوچولو','غول آهنین','کولوی باشگاه','تایتان خشمگین','قهرمان رینگ','جیم باس اصلی'];
 
 /* ---------- state ---------- */
 var KEY='gymboss_v1';
-var DEF={coins:0,total:0,level:1,xp:0,up:{db1:0,db2:0,kb2:0,mch:0,trn:0,prt:0},bossLevel:1,mute:false,savedAt:0};
+var DEF={coins:0,total:0,level:1,xp:0,clicks:0,drinks:0,up:{db1:0,db2:0,kb2:0,mch:0,trn:0,prt:0,shoe:0,gym:0},bossLevel:1,mute:false,savedAt:0};
 function load(){
   try{
     var d=JSON.parse(localStorage.getItem(KEY));
@@ -162,10 +165,13 @@ var S=load()||JSON.parse(JSON.stringify(DEF));
 
 /* derived */
 function proteinMult(){return Math.pow(1.25,S.up.prt);}
-function clickPower(){return (1+S.up.db1*1+S.up.db2*6+S.up.kb2*30+S.up.mch*150)*proteinMult();}
-function income(){return S.up.trn*3*proteinMult();}
+function shoeMult(){return Math.pow(1.2,S.up.shoe||0);}
+function gymMult(){return Math.pow(1.5,S.up.gym||0);}
+function drinkCost(){return Math.floor(1500*Math.pow(1.5,S.drinks||0));}
+function clickPower(){return (1+S.up.db1*1+S.up.db2*6+S.up.kb2*30+S.up.mch*150)*proteinMult()*shoeMult();}
+function income(){return S.up.trn*3*proteinMult()*gymMult();}
 function comboMult(){return 1+Math.min(combo,50)*0.02;}
-function boostMult(){return boostT>0?2:1;}
+function boostMult(){return boostT>0?boostVal:1;}
 function clickGain(){return clickPower()*comboMult()*boostMult();}
 function xpNeed(){return Math.round(40*Math.pow(S.level,1.35));}
 function muscle(){return 1+Math.min(S.level,80)/80*0.55;}
@@ -178,7 +184,7 @@ function upCost(u){return Math.floor(u.base*Math.pow(u.g,S.up[u.id]));}
 /* ---------- runtime ---------- */
 var cv=$('cv'),ctx=cv.getContext('2d');
 var W=900,H=600,k=1;
-var combo=0,comboT=0,liftT=0,boostT=0,tG=0,autoAcc=0,saveAcc=0;
+var combo=0,comboT=0,liftT=0,boostT=0,boostVal=2,tG=0,autoAcc=0,saveAcc=0;
 var floats=[],parts=[],confetti=[];
 var bonus=null,nextBonus=rand(40,80);
 var boss={state:'idle',hp:0,max:0,t:15,cd:0,shake:0};
@@ -235,21 +241,27 @@ function addXp(n){
 }
 function rep(x,y){
   combo++;comboT=1.5;
-  var gain=clickGain();
+  S.clicks=(S.clicks||0)+1;
+  var crit=Math.random()<0.08;
+  var gain=clickGain()*(crit?8:1);
   S.coins+=gain;S.total+=gain;
   addXp(1);
   liftT=0.001;
-  floats.push({x:x,y:y,txt:'+'+fmt(gain),life:1,c:'#ffd94d'});
+  floats.push({x:x,y:y,txt:'+'+fmt(gain),life:1,c:crit?'#ff9d2e':'#ffd94d'});
+  if(crit){floats.push({x:x,y:y-28,txt:'💥 محکم!',life:1,c:'#ff5a5a'});spawnStars(x,y);snd(880,.09,'square',.14);}
   if(Math.random()<0.55)spawnSweat(W/2+rand(-25,25)*k,H*0.9-255*k);
   sndClick();
 }
 function hitBoss(x,y){
   combo++;comboT=1.5;
   liftT=0.001;
-  var d=clickGain();
-  boss.hp-=d;boss.shake=1;
+  S.clicks=(S.clicks||0)+1;
+  var crit=Math.random()<0.08;
+  var d=clickGain()*(crit?8:1);
+  boss.hp-=d;boss.shake=crit?1.6:1;
   addXp(1);
-  floats.push({x:x+rand(-14,14),y:y-10,txt:'-'+fmt(d),life:1,c:'#ffe08a'});
+  floats.push({x:x+rand(-14,14),y:y-10,txt:'-'+fmt(d),life:1,c:crit?'#ff9d2e':'#ffe08a'});
+  if(crit)floats.push({x:x+rand(-14,14),y:y-40,txt:'💥 محکم!',life:1,c:'#ff5a5a'});
   spawnStars(x,y);
   snd(150+Math.min(combo,30)*4,.06,'sawtooth',.16,-50);
   if(boss.hp<=0)winBoss();
@@ -272,7 +284,7 @@ function loseBoss(){
 }
 function collectBonus(){
   var r=Math.max(clickPower()*45,income()*45,60);
-  S.coins+=r;S.total+=r;boostT=30;
+  S.coins+=r;S.total+=r;boostT=30;boostVal=2;
   confettiBurst(bonus.x,bonus.y,36);
   floats.push({x:bonus.x,y:bonus.y-20,txt:'+'+fmt(r),life:1,c:'#ffd94d'});
   toast('✨ پروتئین طلایی! '+fmt(r)+' سکه + ۳۰ ثانیه بوست ×۲');
@@ -449,6 +461,11 @@ function drawDude(o){
   c.quadraticCurveTo((x-shHW+hLx)/2-10*s,(shY+10*s+hLy)/2+12*s,hLx,hLy);c.stroke();
   c.beginPath();c.moveTo(x+shHW,shY+10*s);
   c.quadraticCurveTo((x+shHW+hRx)/2+10*s,(shY+10*s+hRy)/2+12*s,hRx,hRy);c.stroke();
+  /* biceps */
+  var biR=(9+4*(m-1))*s;
+  c.fillStyle=skin;
+  c.beginPath();c.ellipse((x-shHW+hLx)/2-8*s,(shY+10*s+hLy)/2+1*s,biR,biR*0.72,0.5,0,TAU);c.fill();
+  c.beginPath();c.ellipse((x+shHW+hRx)/2+8*s,(shY+10*s+hRy)/2+1*s,biR,biR*0.72,-0.5,0,TAU);c.fill();
   /* kettlebell */
   if(kb){
     var kr=21*s,bx=kb.x,by=kb.y+kr*0.55;
@@ -636,7 +653,7 @@ function updateHeader(){
   $('lvlTitle').textContent=title(S.level);
   $('xpfill').style.width=clamp(S.xp/xpNeed()*100,0,100)+'%';
   var bb=$('boostBox');
-  if(boostT>0){bb.hidden=false;$('boostT').textContent=FA(Math.ceil(boostT));}else bb.hidden=true;
+  if(boostT>0){bb.hidden=false;$('boostX').textContent='×'+FA(boostVal);$('boostT').textContent=FA(Math.ceil(boostT));}else bb.hidden=true;
   $('muteBtn').textContent=S.mute?'🔇':'🔊';
 }
 
@@ -688,6 +705,22 @@ function buildShop(){
     cards.appendChild(el);
     el.querySelector('button').addEventListener('click',function(){buy(u);});
   });
+  var el2=document.createElement('div');el2.className='card';
+  el2.innerHTML='<div class="ic">⚡</div>'+
+    '<div class="mid"><b>انرژی‌زن</b><span>۴۵ ثانیه همه ضربه‌ها ×۳ (مصرفی)</span><small>خریده‌شده: <i id="own-drink">۰</i></small></div>'+
+    '<button id="buy-drink"></button>';
+  cards.appendChild(el2);
+  el2.querySelector('button').addEventListener('click',buyDrink);
+}
+function buyDrink(){
+  if(boss.state!=='idle')return;
+  var c=drinkCost();
+  if(S.coins<c){snd(180,.08,'sawtooth',.08);return;}
+  S.coins-=c;S.drinks=(S.drinks||0)+1;
+  boostT=45;boostVal=3;
+  sndBuy();
+  toast('⚡ انرژی‌زن! ۴۵ ثانیه همه ضربه‌ها ×۳ شد');
+  save();
 }
 function buy(u){
   if(boss.state!=='idle')return;
@@ -711,6 +744,14 @@ setInterval(function(){
   $('bossBtn').disabled=boss.state!=='idle';
   $('bossSub').textContent='سطح '+FA(S.bossLevel)+' — '+bossName();
   $('bossHint').textContent='نیروی هر ضربه‌ات: '+fmt(clickGain())+' • جان باس: '+fmt(bossMax());
+  var db=$('buy-drink');
+  if(db){
+    db.textContent=fmt(drinkCost());
+    db.disabled=S.coins<drinkCost()||boss.state!=='idle';
+    var od=$('own-drink');if(od)od.textContent=FA(S.drinks||0);
+  }
+  var st=$('statsLine');
+  if(st)st.textContent='📊 مجموع درآمد: '+fmt(S.total)+' • مجموع ضربه‌ها: '+FA(S.clicks||0);
   var inFight=boss.state==='cd'||boss.state==='fight'||boss.state==='won'||boss.state==='lost';
   $('fightExit').hidden=!inFight;
   $('shop').classList.toggle('locked',inFight);
