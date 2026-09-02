@@ -61,6 +61,22 @@ header{flex:none;display:flex;align-items:center;gap:12px;padding:10px 16px;back
 #toasts{position:fixed;top:70px;inset-inline-start:16px;display:flex;flex-direction:column;gap:8px;z-index:60;pointer-events:none;max-width:320px}
 .toast{background:rgba(23,58,110,.92);border:1px solid #3b6cb5;color:#fff;padding:10px 16px;border-radius:12px;font-size:13.5px;line-height:1.7;opacity:0;transform:translateY(-8px);transition:all .3s}
 .toast.show{opacity:1;transform:none}
+#lb{position:fixed;inset:0;background:rgba(5,10,25,.75);display:flex;align-items:center;justify-content:center;z-index:55}
+#lb[hidden]{display:none}
+.lbbox{background:linear-gradient(180deg,#173a6e,#0f2a52);border:2px solid #3b6cb5;border-radius:20px;padding:16px 18px;width:min(430px,92vw);max-height:82vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.lbhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.lbhead b{font-size:18px}
+#lbClose{background:#e05656;border:none;color:#fff;border-radius:10px;padding:6px 12px;font-family:inherit;font-weight:700;cursor:pointer}
+.lbtabs{display:flex;gap:8px;margin-bottom:10px}
+.lbtabs button{flex:1;font-family:inherit;font-weight:800;font-size:14px;padding:9px;border-radius:11px;border:1px solid #29508f;background:#0e2a55;color:#9fc0ea;cursor:pointer}
+.lbtabs button.on{background:linear-gradient(180deg,#ff9d2e,#f4700b);color:#fff;border-color:#b34f00}
+.lbrow{display:flex;align-items:center;gap:8px;background:#10305d;border:1px solid #29508f;border-radius:10px;padding:7px 10px;margin-bottom:6px;font-size:13.5px}
+.lbrow .rk{width:34px;text-align:center;font-weight:900;color:#ffd94d}
+.lbrow .nm{flex:1}
+.lbrow .vl{color:#cfe2ff;font-weight:700}
+.lbrow.me{background:linear-gradient(90deg,#6b4a0b,#3d2f07);border-color:#ffd94d}
+.lbme{margin-top:8px;text-align:center;font-size:12.5px;color:#ffc98a;line-height:1.8}
+.lbme b{color:#ffd94d}
 @media (max-width:840px){
   #mainrow{flex-direction:column}
   #shop{width:100%;max-height:36vh;border-right:none;border-top:2px solid #0a1c38}
@@ -79,6 +95,7 @@ header{flex:none;display:flex;align-items:center;gap:12px;padding:10px 16px;back
     </div>
     <div class="stat" id="boostBox" hidden>🔥 بوست <b id="boostX">×۲</b> — <b id="boostT">۳۰</b> ثانیه</div>
     <div class="spacer"></div>
+    <button class="iconbtn" id="lbBtn" title="برترین‌ها">🏆</button>
     <button class="iconbtn" id="muteBtn" title="صدا">🔊</button>
   </header>
 
@@ -110,6 +127,17 @@ header{flex:none;display:flex;align-items:center;gap:12px;padding:10px 16px;back
       <button id="mAgain">⚔️ دوباره!</button>
       <button id="mExit">باشگاه 💪</button>
     </div>
+  </div>
+</div>
+<div id="lb" hidden>
+  <div class="lbbox">
+    <div class="lbhead"><b>🏆 برترین‌های باشگاه</b><button id="lbClose">✖</button></div>
+    <div class="lbtabs">
+      <button id="tabLift" class="on">💪 وزنه‌زنی</button>
+      <button id="tabBody">🏆 بدنسازی</button>
+    </div>
+    <div id="lbList"></div>
+    <div class="lbme" id="lbMe"></div>
   </div>
 </div>
 <div id="toasts"></div>
@@ -657,6 +685,43 @@ function updateHeader(){
   $('muteBtn').textContent=S.mute?'🔇':'🔊';
 }
 
+/* ---------- leaderboard ---------- */
+var LB_NAMES=['گاو آهنی','شیرعلی','پهلوان رضا','هالتر بهروز','کولاک شمال','راستی محسن','علی دو بازو','سلطان عضله','ممد فولاد','جتِ هستی','پدرام پرس','رضا تندر','ببر مازندران','غول گچ','وحید وزنه','آهن‌سرد','توپ‌خانه','چکش کاوه','رعد محسن','زورخونه زال','دلاور دانا','هماون حامد','کوه گاوان','نسیم کوهستان'];
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
+var LB={lift:[],body:[]};
+(function(){
+  var r=mulberry32(20260902),i;
+  for(i=0;i<24;i++){
+    LB.lift.push({name:LB_NAMES[i],v:Math.max(5,Math.round(Math.pow(10,1.3+r()*r()*7.2)))});
+    LB.body.push({name:LB_NAMES[(i*5+7)%LB_NAMES.length],v:1+Math.floor(Math.pow(r(),1.7)*117)});
+  }
+  LB.lift.sort(function(a,b){return b.v-a.v;});
+  LB.body.sort(function(a,b){return b.v-a.v;});
+})();
+function lbRank(list,v){var n=1,i;for(i=0;i<list.length;i++)if(list[i].v>v)n++;return n;}
+var lbMode='lift';
+function renderLB(){
+  var list=lbMode==='lift'?LB.lift:LB.body;
+  var my=lbMode==='lift'?(S.clicks||0):S.level;
+  var rows=[],i;
+  for(i=0;i<list.length;i++)rows.push({v:list[i].v,name:list[i].name,me:false});
+  rows.push({v:my,name:'تو',me:true});
+  rows.sort(function(a,b){return b.v-a.v;});
+  var html='';
+  for(i=0;i<rows.length;i++){
+    if(!rows[i].me&&i>=10)continue;
+    html+='<div class="lbrow'+(rows[i].me?' me':'')+'"><span class="rk">'+FA(i+1)+'</span><span class="nm">'+rows[i].name+'</span><span class="vl">'+(lbMode==='lift'?FA(rows[i].v)+' ضربه':'سطح '+FA(rows[i].v))+'</span></div>';
+  }
+  $('lbList').innerHTML=html;
+  $('lbMe').innerHTML='رتبه تو در وزنه‌زنی: <b>'+FA(lbRank(LB.lift,S.clicks||0))+'</b> از '+FA(LB.lift.length+1)+
+    ' · در بدنسازی: <b>'+FA(lbRank(LB.body,S.level))+'</b> از '+FA(LB.body.length+1)+
+    '<br>هرچه بیشتر وزنه بزنی و سطح بگیری، رتبه‌ات بالاتر می‌رود!';
+}
+$('lbBtn').addEventListener('click',function(){renderLB();$('lb').hidden=false;});
+$('lbClose').addEventListener('click',function(){$('lb').hidden=true;});
+$('tabLift').addEventListener('click',function(){lbMode='lift';$('tabLift').classList.add('on');$('tabBody').classList.remove('on');renderLB();});
+$('tabBody').addEventListener('click',function(){lbMode='body';$('tabBody').classList.add('on');$('tabLift').classList.remove('on');renderLB();});
+
 /* ---------- input ---------- */
 cv.addEventListener('pointerdown',function(e){
   initAudio();
@@ -666,6 +731,7 @@ cv.addEventListener('pointerdown',function(e){
   if(boss.state==='idle')rep(x,y);
 });
 window.addEventListener('keydown',function(e){
+  if(e.code==='Escape'){$('lb').hidden=true;return;}
   if(e.code==='Space'){
     e.preventDefault();
     if(boss.state==='fight')hitBoss(W*0.68+rand(-50,50),H*0.5+rand(-40,40));
